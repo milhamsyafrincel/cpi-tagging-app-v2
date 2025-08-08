@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPI Tagging</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="main-layout">
+        <div class="control-panel"> 
+            <div class="container">
+                <h1>Masukkan Data</h1>
+
+                <div class="input-group">
+                    <label for="imageId">ID:</label>
+                    <input type="text" id="imageId" placeholder="Ex: PAP2096" value="">
+                </div>
+
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="imageUpload" accept="image/*">
+                    <label for="imageUpload" id="fileLabel">Click, drag, atau paste image di sini</label>
+                    <p class="filename-display" id="filenameDisplay"></p>
+                </div>
+
+                <button id="processButton" disabled>Proses & Download Image</button>
+                <p class="message" id="message"></p>
+            </div>
+        </div>
+        
+        <div class="preview-panel"> <h2>Image Preview</h2>
+            <div class="image-preview-wrapper">
+                <img id="imagePreview" src="#" alt="Your Image Preview">
+                <p id="noImageMessage">Image belum diupload.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const imageUpload = document.getElementById('imageUpload');
+        const imageIdInput = document.getElementById('imageId');
+        const processButton = document.getElementById('processButton');
+        const fileLabel = document.getElementById('fileLabel');
+        const uploadArea = document.getElementById('uploadArea');
+        const filenameDisplay = document.getElementById('filenameDisplay');
+        const message = document.getElementById('message');
+        const imagePreview = document.getElementById('imagePreview');
+        const noImageMessage = document.getElementById('noImageMessage');
+
+        let uploadedFile = null; 
+        let dragCounter = 0;
+
+        // Fungsi untuk mengupdate User Interface
+        function updateUI() {
+            const isFileUploaded = !!uploadedFile; // Cek apakah image sudah diupload (true = sudah, false = belum)
+            const isIdFilled = imageIdInput.value.trim() !== ''; // Cek apakah ID sudah diisi (true = sudah, false = belum)
+
+            // Action jika image sudah/belum diupload terhadap Area Upload Image dan Image Preview
+            if (isFileUploaded) {
+                filenameDisplay.textContent = `File dipilih: ${uploadedFile.name}`;
+                imagePreview.style.display = 'block';
+                noImageMessage.style.display = 'none';
+            } else {
+                filenameDisplay.textContent = '';
+                imagePreview.src = '#';
+                imagePreview.style.display = 'none';
+                noImageMessage.style.display = 'block';
+            }
+
+            // Action jika image dan ID sudah/belum diisi terhadap button dan pesan dibawahnya
+            if (isFileUploaded && isIdFilled) { 
+                processButton.disabled = false;
+                message.textContent = ''; 
+                message.style.color = '#333';
+            } else {
+                processButton.disabled = true;
+                if (!isIdFilled && !isFileUploaded) {
+                    message.textContent = 'Silakan masukkan ID dan Image untuk melanjutkan.';
+                    message.style.color = '#666';
+                } else if (!isIdFilled) {
+                    message.textContent = 'Masukkan ID untuk memulai.';                
+                    message.style.color = '#666';
+                } else if (!isFileUploaded) {
+                    message.textContent = 'Masukkan image untuk memulai.';
+                    message.style.color = '#666';
+                } else {
+                    message.textContent = '';
+                }
+            }
+        }
+
+        updateUI();
+
+        // Handler untuk perubahan input file image (browse)
+        imageUpload.addEventListener('change', function(event) {
+            uploadedFile = event.target.files[0];
+            if (uploadedFile) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    imagePreview.src = e.target.result;
+                    updateUI();
+                };
+                reader.readAsDataURL(uploadedFile);
+            } else {
+                updateUI();
+            }
+        });
+
+        // Handler untuk paste image (Ctrl+V)
+        document.addEventListener('paste', function(event) {
+            event.preventDefault();
+            const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+            
+            let imageFoundInPaste = false;
+            const pastePromises = [];
+            
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1 && !imageFoundInPaste) {
+                    uploadedFile = items[i].getAsFile();
+                    if (uploadedFile) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            imagePreview.src = e.target.result;
+                        };
+                        reader.readAsDataURL(uploadedFile);
+                    }
+                    imageFoundInPaste = true;
+                }
+
+                if (items[i].type.indexOf('text/plain') !== -1) {
+                   pastePromises.push(new Promise(resolve => {
+                        items[i].getAsString(function(text) {
+                            let formattedText = text.trim();
+                            formattedText = formattedText.toUpperCase();
+                            formattedText = formattedText.replace(/\s/g, '');
+
+                            if (formattedText) {
+                                imageIdInput.value = formattedText;
+                            }
+                            resolve(true); 
+                        });
+                    }));
+                    break; 
+                }
+            }
+
+            Promise.all(pastePromises).then(() => {
+                updateUI(); 
+            });
+
+        });
+
+        // Handler drag and drop image (drag enter)
+        document.body.addEventListener('dragenter', (e) => {
+            e.preventDefault(); 
+            e.stopPropagation(); 
+
+            dragCounter++;
+            if (dragCounter === 1) { 
+                uploadArea.classList.add('drag-active'); 
+            }
+        });
+
+        // Handler drag and drop image (drag over)
+        document.body.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        // Handler drag and drop image (drag leave)
+        document.body.addEventListener('dragleave', (e) => {
+            e.preventDefault(); 
+            e.stopPropagation();
+
+            dragCounter--;
+            if (dragCounter === 0) {
+                uploadArea.classList.remove('drag-active');
+            }
+        });
+
+        // Handler drag and drop image (drop)
+        document.body.addEventListener('drop', (e) => {
+            e.preventDefault(); 
+            e.stopPropagation(); 
+
+            dragCounter = 0;
+            uploadArea.classList.remove('drag-active');
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type.startsWith('image/')) {
+                uploadedFile = files[0];
+                const reader = new FileReader();
+                reader.onload = function(e_reader) { // Gunakan nama variabel berbeda (e_reader)
+                    imagePreview.src = e_reader.target.result;
+                    updateUI(); 
+                };
+                reader.readAsDataURL(uploadedFile);
+            } else {
+                if (files.length > 0) {
+                    message.textContent = 'Hanya file image yang diizinkan.';
+                    message.style.color = 'red';
+                } else {
+                    message.textContent = 'Tidak ada file yang dijatuhkan.';
+                    message.style.color = '#888';
+                }
+                updateUI(); 
+            }
+        });
+
+        // Handler tombol (Enter, Escape, dan Backspace)
+        document.addEventListener('keydown', function(event) {
+
+            // Tombol Enter untuk click button (Proses & Download Image)
+            if (event.key === 'Enter' || event.keyCode === 13) {
+                event.preventDefault(); 
+                
+                if (!processButton.disabled) {
+                    processButton.click();
+                }
+            }
+
+            // Tombol Escape untuk hapus gambar yang udah diupload
+            else if (event.key === 'Escape' || event.keyCode === 27) {
+                event.preventDefault();
+                uploadedFile = null;
+
+                imageUpload.value = '';
+                updateUI(); 
+            }
+
+            // Tombol Backspace untuk hapus ID (bukan secara kesuluran)
+            else if (event.key === 'Backspace' || event.keyCode === 8) {
+            const targetTagName = event.target.tagName;
+            if (targetTagName !== 'INPUT' && targetTagName !== 'TEXTAREA') {
+                event.preventDefault(); 
+                imageIdInput.focus(); 
+                if (imageIdInput.value.length > 0) {
+                    imageIdInput.value = imageIdInput.value.slice(0, -1);
+                }
+                updateUI(); 
+            }
+        }
+        });
+
+        // Listener untuk input ID manual
+        imageIdInput.addEventListener('input', function() {
+            let currentId = imageIdInput.value;
+            currentId = currentId.toUpperCase().replace(/\s/g, '');
+            if (imageIdInput.value !== currentId) { 
+                imageIdInput.value = currentId;
+            }
+            updateUI();
+        });
+
+        // Action jika tombol di click
+        processButton.addEventListener('click', async function() {
+            if (!uploadedFile) {
+                message.textContent = 'Mohon unggah image terlebih dahulu.';
+                message.style.color = 'red';
+                return;
+            }
+
+            const imageIdValue = imageIdInput.value;
+            if (!imageIdValue.trim()) {
+                message.textContent = 'ID tidak boleh kosong.';
+                message.style.color = 'red';
+                return;
+            }
+
+            message.textContent = 'Memproses image... Harap tunggu.';
+            message.style.color = '#007bff';
+            processButton.disabled = true;
+
+            const formData = new FormData();
+            formData.append('image', uploadedFile);
+            formData.append('image_id', imageIdValue);
+
+            // Mengirim data ke backend
+            try {
+                const response = await fetch('/process_image', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    
+                    // Proses rename nama file image
+                    const now = new Date();
+                    const day = now.getDate();
+                    const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", 
+                                        "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+                    const monthName = monthNames[now.getMonth()];
+                    const year = now.getFullYear();
+
+                    const formattedDateForFilename = `${day} ${monthName} ${year}`; 
+                    
+                    a.download = `${imageIdValue} ${formattedDateForFilename}.png`; 
+
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+
+                    message.textContent = 'Image berhasil diproses dan diunduh!';
+                    message.style.color = 'green';
+                    
+                    imageUpload.value = '';
+                    uploadedFile = null;
+                    imageIdInput.value = '';
+                    updateUI();
+                } else {
+                    const errorText = await response.text();
+                    message.textContent = `Terjadi kesalahan: ${errorText}`;
+                    message.style.color = 'red';
+                    processButton.disabled = false; 
+                }
+
+            } catch (error) {
+                message.textContent = `Terjadi kesalahan jaringan: ${error}`;
+                message.style.color = 'red';
+                console.error('Error:', error);
+                processButton.disabled = false; 
+            }
+        });
+    </script>
+</body>
+</html>
